@@ -6,13 +6,27 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/gofrs/uuid/v5"
 )
 
 type DexcomSession struct {
 	username  string
 	password  string
-	sessionid string
+	sessionid uuid.UUID
+}
+
+type EstimatedGlucoseValue struct {
+	WT         string `json:"WT"`
+	ST         string `json:"ST"`
+	DT         string `json:"DT"`
+	Value      int    `json:"Value"`
+	Trend      string `json:"Trend"`
+	TrendArrow string
 }
 
 func Login(username string, password string) *DexcomSession {
@@ -45,9 +59,65 @@ func Login(username string, password string) *DexcomSession {
 	}
 
 	body, err = io.ReadAll(res.Body)
+	id := strings.ReplaceAll(string(body), "\"", "")
+	sessionUuid, err := uuid.FromString(id)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	return &DexcomSession{
 		username:  username,
 		password:  password,
-		sessionid: string(body),
+		sessionid: sessionUuid,
 	}
+}
+
+func (dexcom DexcomSession) GetEGV(params ...int) []EstimatedGlucoseValue {
+	var maxCount, minutes int
+	if len(params) > 0 {
+		maxCount = params[0]
+		if len(params) > 1 {
+			minutes = params[1]
+		} else {
+			minutes = 1440
+		}
+	} else {
+		maxCount = 1
+		minutes = 1440
+	}
+
+	url, err := url.Parse(BaseUrlUS + CurrentEGVPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	q := url.Query()
+	q.Set("sessionId", dexcom.sessionid.String())
+	q.Set("maxCount", strconv.Itoa(maxCount))
+	q.Set("minutes", strconv.Itoa(minutes))
+	url.RawQuery = q.Encode()
+
+	res, err := http.Post(url.String(), "", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var egvs []EstimatedGlucoseValue
+	json.Unmarshal(data, &egvs)
+	for i, egv := range egvs {
+		egvs[i].TrendArrow = TrendArrowMap[egv.Trend]
+	}
+
+	return egvs
+}
+
+func (dexcom DexcomSession) GetLatestEGV() EstimatedGlucoseValue {
+	egvs := dexcom.GetEGV()
+	return egvs[0]
 }

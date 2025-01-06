@@ -11,4 +11,22 @@ const ApplicationId = "d8665ade-9673-4e27-9ff6-92db4ce13d13"
 const BaseUrlUS = "https://share2.dexcom.com/ShareWebServices/Services"
 const LoginPath = "/General/LoginPublisherAccountByName"
 const AuthPath = "/General/AuthenticatePublisherAccount"
-const CurrentEGVPath = "/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues"
+const CurrentEGVPath = "/Publisher/ReadPublisherLatestGlucoseValues"
+
+// TrendArrow Map
+// To check the possible states I used documentation from the pydexcom module
+// https://github.com/gagebenne/pydexcom/tree/main
+// The ones that are unconfirmed are noted on there as well
+// I'm not getting my blood sugar purposely that high to test this
+var TrendArrowMap = map[string]string{
+	"None":           "", // Unconfirmed
+	"Flat":           "→",
+	"SingleUp":       "↑",
+	"DoubleUp":       "↑↑",
+	"FortyFiveUp":    "↗",
+	"SingleDown":     "↓",
+	"DoubleDown":     "↓↓",
+	"FortyFiveDown":  "↘",
+	"NotComputable":  "?", // Unconfirmed
+	"RateOutOfRange": "-", // Unconfirmed
+}
