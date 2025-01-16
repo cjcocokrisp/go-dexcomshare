@@ -3,6 +3,7 @@ package dexcomshare
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -10,14 +11,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/gofrs/uuid/v5"
 )
 
 type DexcomSession struct {
 	username  string
 	password  string
-	sessionid uuid.UUID
+	sessionid *string
 }
 
 type EstimatedGlucoseValue struct {
@@ -29,7 +28,7 @@ type EstimatedGlucoseValue struct {
 	TrendArrow string
 }
 
-func Login(username string, password string) *DexcomSession {
+func Login(username string, password string) (*DexcomSession, error) {
 	body, err := json.Marshal(map[string]string{
 		"accountName":   username,
 		"password":      password,
@@ -37,12 +36,12 @@ func Login(username string, password string) *DexcomSession {
 	})
 
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	req, err := http.NewRequest("POST", BaseUrlUS+LoginPath, bytes.NewBuffer(body))
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	req.Header.Add("Content-Type", "application/json")
@@ -50,29 +49,28 @@ func Login(username string, password string) *DexcomSession {
 	client := http.Client{Timeout: 10 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode == 500 {
-		log.Fatal("AuthError: Invalid Dexcom username and password!\n")
+		return nil, errors.New("AuthError: Invalid username or password!")
 	}
 
 	body, err = io.ReadAll(res.Body)
 	id := strings.ReplaceAll(string(body), "\"", "")
-	sessionUuid, err := uuid.FromString(id)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	return &DexcomSession{
 		username:  username,
 		password:  password,
-		sessionid: sessionUuid,
-	}
+		sessionid: &id,
+	}, nil
 }
 
-func (dexcom DexcomSession) GetEGV(params ...int) []EstimatedGlucoseValue {
+func (dexcom DexcomSession) GetEGV(params ...int) ([]EstimatedGlucoseValue, error) {
 	var maxCount, minutes int
 	if len(params) > 0 {
 		maxCount = params[0]
@@ -86,26 +84,30 @@ func (dexcom DexcomSession) GetEGV(params ...int) []EstimatedGlucoseValue {
 		minutes = 1440
 	}
 
+	if dexcom.sessionid == nil {
+		return nil, errors.New("Invalid Session Token.")
+	}
+
 	url, err := url.Parse(BaseUrlUS + CurrentEGVPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	q := url.Query()
-	q.Set("sessionId", dexcom.sessionid.String())
+	q.Set("sessionId", dexcom.sessionid)
 	q.Set("maxCount", strconv.Itoa(maxCount))
 	q.Set("minutes", strconv.Itoa(minutes))
 	url.RawQuery = q.Encode()
 
 	res, err := http.Post(url.String(), "", nil)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	defer res.Body.Close()
 
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	var egvs []EstimatedGlucoseValue
@@ -114,10 +116,10 @@ func (dexcom DexcomSession) GetEGV(params ...int) []EstimatedGlucoseValue {
 		egvs[i].TrendArrow = TrendArrowMap[egv.Trend]
 	}
 
-	return egvs
+	return egvs, nil
 }
 
-func (dexcom DexcomSession) GetLatestEGV() EstimatedGlucoseValue {
-	egvs := dexcom.GetEGV()
-	return egvs[0]
+func (dexcom DexcomSession) GetLatestEGV() (EstimatedGlucoseValue, error) {
+	egvs, err := dexcom.GetEGV()
+	return egvs[0], err
 }
