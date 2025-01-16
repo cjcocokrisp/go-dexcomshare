@@ -30,3 +30,6 @@ var TrendArrowMap = map[string]string{
 	"NotComputable":  "?", // Unconfirmed
 	"RateOutOfRange": "-", // Unconfirmed
 }
+
+// Default Values
+const DefaultMinutes = 1440

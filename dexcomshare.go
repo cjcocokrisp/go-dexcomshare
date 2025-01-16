@@ -114,7 +114,10 @@ func (dexcom DexcomSession) GetEGV(amount int, minutes int) ([]EstimatedGlucoseV
 }
 
 // Get latest EGV from CGM.
-func (dexcom DexcomSession) GetLatestEGV() (EstimatedGlucoseValue, error) {
-	egvs, err := dexcom.GetEGV(1, 1440)
-	return egvs[0], err
+func (dexcom DexcomSession) GetLatestEGV() (*EstimatedGlucoseValue, error) {
+	egvs, err := dexcom.GetEGV(1, DefaultMinutes)
+	if len(egvs) == 0 {
+		return nil, errors.New("ReadingError: No readings were available.")
+	}
+	return &egvs[0], err
 }
