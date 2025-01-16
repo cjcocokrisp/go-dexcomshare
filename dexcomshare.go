@@ -13,12 +13,14 @@ import (
 	"time"
 )
 
+// Struct that represents a Dexcom session.
 type DexcomSession struct {
 	username  string
 	password  string
 	sessionid *string
 }
 
+// Struct that represents the parts of an EGV reading.
 type EstimatedGlucoseValue struct {
 	WT         string `json:"WT"`
 	ST         string `json:"ST"`
@@ -28,6 +30,7 @@ type EstimatedGlucoseValue struct {
 	TrendArrow string
 }
 
+// Log into Dexcom with your username and password.
 func Login(username string, password string) (*DexcomSession, error) {
 	body, err := json.Marshal(map[string]string{
 		"accountName":   username,
@@ -53,6 +56,7 @@ func Login(username string, password string) (*DexcomSession, error) {
 	}
 	defer res.Body.Close()
 
+	// If credentials are not correct
 	if res.StatusCode == 500 {
 		return nil, errors.New("AuthError: Invalid username or password!")
 	}
@@ -70,20 +74,10 @@ func Login(username string, password string) (*DexcomSession, error) {
 	}, nil
 }
 
-func (dexcom DexcomSession) GetEGV(params ...int) ([]EstimatedGlucoseValue, error) {
-	var maxCount, minutes int
-	if len(params) > 0 {
-		maxCount = params[0]
-		if len(params) > 1 {
-			minutes = params[1]
-		} else {
-			minutes = 1440
-		}
-	} else {
-		maxCount = 1
-		minutes = 1440
-	}
-
+// Get EGV values from CGM.
+// @arg - amount (amount of readings to get)
+// @arg - minutes (not really sure what this is documentation was not very specific, it uses 1440 so just stick with that)
+func (dexcom DexcomSession) GetEGV(amount int, minutes int) ([]EstimatedGlucoseValue, error) {
 	if dexcom.sessionid == nil {
 		return nil, errors.New("Invalid Session Token.")
 	}
@@ -94,8 +88,8 @@ func (dexcom DexcomSession) GetEGV(params ...int) ([]EstimatedGlucoseValue, erro
 	}
 
 	q := url.Query()
-	q.Set("sessionId", dexcom.sessionid)
-	q.Set("maxCount", strconv.Itoa(maxCount))
+	q.Set("sessionId", *dexcom.sessionid)
+	q.Set("maxCount", strconv.Itoa(amount))
 	q.Set("minutes", strconv.Itoa(minutes))
 	url.RawQuery = q.Encode()
 
@@ -119,7 +113,8 @@ func (dexcom DexcomSession) GetEGV(params ...int) ([]EstimatedGlucoseValue, erro
 	return egvs, nil
 }
 
+// Get latest EGV from CGM.
 func (dexcom DexcomSession) GetLatestEGV() (EstimatedGlucoseValue, error) {
-	egvs, err := dexcom.GetEGV()
+	egvs, err := dexcom.GetEGV(1, 1440)
 	return egvs[0], err
 }
