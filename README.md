@@ -8,7 +8,7 @@ A Golang module that communicates with the Dexcom Share API that was documented 
 
 ## Installation
 
-Not installable yet, working on it :)
+`go get github.com/cjcocokrisp/go-dexcomshare@v1.0.0`
 
 ## Examples
 Reading a single estimated glucose value.
