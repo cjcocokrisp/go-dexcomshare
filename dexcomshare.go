@@ -18,6 +18,7 @@ type DexcomSession struct {
 	username  string
 	password  string
 	sessionid *string
+	BaseUrl   string
 }
 
 // Struct that represents the parts of an EGV reading.
@@ -31,7 +32,17 @@ type EstimatedGlucoseValue struct {
 }
 
 // Log into Dexcom with your username and password.
-func Login(username string, password string) (*DexcomSession, error) {
+func Login(username string, password string, region string) (*DexcomSession, error) {
+
+	var BaseUrl string
+	if region == "US" {
+		BaseUrl = BaseUrlUS
+	} else if region == "OUS" {
+		BaseUrl = BaseUrlOUS
+	} else {
+		return nil, errors.New("Invalid region specified. Use 'US' or 'OUS'.")
+	}
+
 	body, err := json.Marshal(map[string]string{
 		"accountName":   username,
 		"password":      password,
@@ -41,14 +52,13 @@ func Login(username string, password string) (*DexcomSession, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	req, err := http.NewRequest("POST", BaseUrlUS+LoginPath, bytes.NewBuffer(body))
+	print(BaseUrl + LoginPath)
+	req, err := http.NewRequest("POST", BaseUrl+LoginPath, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Add("Content-Type", "application/json")
-
 	client := http.Client{Timeout: 10 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
@@ -62,6 +72,7 @@ func Login(username string, password string) (*DexcomSession, error) {
 	}
 
 	body, err = io.ReadAll(res.Body)
+	print(body)
 	id := strings.ReplaceAll(string(body), "\"", "")
 	if err != nil {
 		return nil, err
@@ -71,6 +82,7 @@ func Login(username string, password string) (*DexcomSession, error) {
 		username:  username,
 		password:  password,
 		sessionid: &id,
+		BaseUrl:   BaseUrl,
 	}, nil
 }
 
@@ -82,7 +94,10 @@ func (dexcom DexcomSession) GetEGV(amount int, minutes int) ([]EstimatedGlucoseV
 		return nil, errors.New("Invalid Session Token.")
 	}
 
-	url, err := url.Parse(BaseUrlUS + CurrentEGVPath)
+	//TODO: Remove Debugging prints
+	//fmt.Printf("%s\n", dexcom.BaseUrl+CurrentEGVPath)
+	//fmt.Printf("%s\n", *dexcom.sessionid)
+	url, err := url.Parse(dexcom.BaseUrl + CurrentEGVPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -109,7 +124,6 @@ func (dexcom DexcomSession) GetEGV(amount int, minutes int) ([]EstimatedGlucoseV
 	for i, egv := range egvs {
 		egvs[i].TrendArrow = TrendArrowMap[egv.Trend]
 	}
-
 	return egvs, nil
 }
 
