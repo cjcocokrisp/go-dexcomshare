@@ -17,6 +17,7 @@ import (
 type DexcomSession struct {
 	username  string
 	password  string
+	accountId string
 	sessionid *string
 	BaseUrl   string
 }
@@ -31,15 +32,27 @@ type EstimatedGlucoseValue struct {
 	TrendArrow string
 }
 
+func Post(url string, body []byte) (*http.Response, error) {
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Content-Type", "application/json")
+	client := &http.Client{Timeout: 10 * time.Second}
+	return client.Do(req)
+}
+
 // Log into Dexcom with your username and password.
 func Login(username string, password string, region string) (*DexcomSession, error) {
+	// need to add vaildation if username is an email or id
 
 	var BaseUrl string
-	if region == "US" {
+	switch region {
+	case "US":
 		BaseUrl = BaseUrlUS
-	} else if region == "OUS" {
+	case "OUS":
 		BaseUrl = BaseUrlOUS
-	} else {
+	default:
 		return nil, errors.New("Invalid region specified. Use 'US' or 'OUS'.")
 	}
 
@@ -52,15 +65,8 @@ func Login(username string, password string, region string) (*DexcomSession, err
 	if err != nil {
 		return nil, err
 	}
-	print(BaseUrl + LoginPath)
-	req, err := http.NewRequest("POST", BaseUrl+LoginPath, bytes.NewBuffer(body))
-	if err != nil {
-		return nil, err
-	}
 
-	req.Header.Add("Content-Type", "application/json")
-	client := http.Client{Timeout: 10 * time.Second}
-	res, err := client.Do(req)
+	res, err := Post(BaseUrl+AuthPath, body)
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +78,31 @@ func Login(username string, password string, region string) (*DexcomSession, err
 	}
 
 	body, err = io.ReadAll(res.Body)
-	print(body)
-	id := strings.ReplaceAll(string(body), "\"", "")
+	accountId := strings.ReplaceAll(string(body), "\"", "")
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: AB HIER REWORK
+	body2, err := json.Marshal(map[string]string{
+		"accountId":     accountId,
+		"applicationId": ApplicationId,
+		"password":      password,
+	})
+
+	res2, err := Post(BaseUrl+LoginPathId, body2)
+	if err != nil {
+		return nil, err
+	}
+	defer res2.Body.Close()
+
+	// If credentials are not correct
+	if res2.StatusCode == 500 {
+		return nil, errors.New("AuthError: Invalid username or password!")
+	}
+
+	body2, err = io.ReadAll(res2.Body)
+	id := strings.ReplaceAll(string(body2), "\"", "")
 	if err != nil {
 		return nil, err
 	}
@@ -81,6 +110,7 @@ func Login(username string, password string, region string) (*DexcomSession, err
 	return &DexcomSession{
 		username:  username,
 		password:  password,
+		accountId: accountId,
 		sessionid: &id,
 		BaseUrl:   BaseUrl,
 	}, nil
