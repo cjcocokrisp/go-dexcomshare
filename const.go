@@ -10,6 +10,7 @@ const ApplicationId = "d89443d2-327c-4a6f-89e5-496bbb0317db"
 // API Endpoints
 const BaseUrlUS = "https://share2.dexcom.com/ShareWebServices/Services"
 const BaseUrlOUS = "https://shareous1.dexcom.com/ShareWebServices/Services"
+const BaseUrlJP = "https://share.dexcom.jp/ShareWebServices/Services/"
 const LoginPath = "/General/LoginPublisherAccountByName"
 const LoginPathId = "/General/LoginPublisherAccountById"
 const AuthPath = "/General/AuthenticatePublisherAccount"

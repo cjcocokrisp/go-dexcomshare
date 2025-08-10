@@ -1,7 +1,6 @@
 package dexcomshare
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -10,7 +9,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Struct that represents a Dexcom session.
@@ -32,77 +30,72 @@ type EstimatedGlucoseValue struct {
 	TrendArrow string
 }
 
-func Post(url string, body []byte) (*http.Response, error) {
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Add("Content-Type", "application/json")
-	client := &http.Client{Timeout: 10 * time.Second}
-	return client.Do(req)
-}
-
 // Log into Dexcom with your username and password.
 func Login(username string, password string, region string) (*DexcomSession, error) {
-	// need to add vaildation if username is an email or id
+	var needToAuth bool
+	var accountId string
+
+	if IsEmail(username) {
+		// conitnue auth
+		needToAuth = true
+	} else if IsUUID(username) {
+		// continue login with id
+		needToAuth = false
+		accountId = username
+	} else {
+		return nil, errors.New("invalid username format. use email or uuid.")
+	}
 
 	var BaseUrl string
 	switch region {
-	case "US":
+	case "us":
 		BaseUrl = BaseUrlUS
-	case "OUS":
+	case "ous":
 		BaseUrl = BaseUrlOUS
 	default:
-		return nil, errors.New("Invalid region specified. Use 'US' or 'OUS'.")
+		return nil, errors.New("invalid region specified, use 'us' or 'ous'")
+	}
+
+	if needToAuth {
+		body, err := json.Marshal(map[string]string{
+			"accountName":   username,
+			"password":      password,
+			"applicationId": ApplicationId,
+		})
+		if err != nil {
+			return nil, err
+		}
+		res, err := DexcomAPIRequest(BaseUrl+AuthPath, body)
+		if err != nil {
+			return nil, err
+		}
+		defer res.Body.Close()
+		resBody, err := io.ReadAll(res.Body)
+		if err != nil {
+			return nil, err
+		}
+		accountId = strings.ReplaceAll(string(resBody), "\"", "")
+
 	}
 
 	body, err := json.Marshal(map[string]string{
-		"accountName":   username,
-		"password":      password,
-		"applicationId": ApplicationId,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := Post(BaseUrl+AuthPath, body)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	// If credentials are not correct
-	if res.StatusCode == 500 {
-		return nil, errors.New("AuthError: Invalid username or password!")
-	}
-
-	body, err = io.ReadAll(res.Body)
-	accountId := strings.ReplaceAll(string(body), "\"", "")
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: AB HIER REWORK
-	body2, err := json.Marshal(map[string]string{
 		"accountId":     accountId,
 		"applicationId": ApplicationId,
 		"password":      password,
 	})
 
-	res2, err := Post(BaseUrl+LoginPathId, body2)
 	if err != nil {
 		return nil, err
 	}
-	defer res2.Body.Close()
 
-	// If credentials are not correct
-	if res2.StatusCode == 500 {
-		return nil, errors.New("AuthError: Invalid username or password!")
+	res, err := DexcomAPIRequest(BaseUrl+LoginPathId, body)
+	if err != nil {
+		return nil, err
 	}
+	defer res.Body.Close()
 
-	body2, err = io.ReadAll(res2.Body)
-	id := strings.ReplaceAll(string(body2), "\"", "")
+	resBody, err := io.ReadAll(res.Body)
+	id := strings.ReplaceAll(string(resBody), "\"", "")
 	if err != nil {
 		return nil, err
 	}
