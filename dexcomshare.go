@@ -30,10 +30,26 @@ type EstimatedGlucoseValue struct {
 	TrendArrow string
 }
 
+// Function to make a POST request to the Dexcom API.
+func DexcomAPIRequest(url string, payload []byte) (*http.Response, error) {
+	res, err := Post(url, payload)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if the response status is OK
+	if res.StatusCode != http.StatusOK {
+		return nil, errors.New("API request failed with status: " + res.Status)
+	}
+
+	return res, nil
+}
+
 // Log into Dexcom with your username and password.
 func Login(username string, password string, region string) (*DexcomSession, error) {
 	var needToAuth bool
 	var accountId string
+	var ApplicationId string
 
 	if IsEmail(username) {
 		// conitnue auth
@@ -50,8 +66,13 @@ func Login(username string, password string, region string) (*DexcomSession, err
 	switch region {
 	case "us":
 		BaseUrl = BaseUrlUS
+		ApplicationId = ApplicationIdUS
 	case "ous":
 		BaseUrl = BaseUrlOUS
+		ApplicationId = ApplicationIdOUS
+	case "jp":
+		BaseUrl = BaseUrlJP
+		ApplicationId = ApplicationIdJP
 	default:
 		return nil, errors.New("invalid region specified, use 'us' or 'ous'")
 	}

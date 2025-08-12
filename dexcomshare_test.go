@@ -5,7 +5,7 @@ import (
 )
 
 func TestGetLatestEGV(t *testing.T) {
-	dexcom, err := Login("USERNAME", "PASSWORD", "REGION")
+	dexcom, err := Login("USERNAME||UUID", "PASSWORD", "REGION")
 	if err != nil {
 		t.Error(err)
 	}
@@ -17,7 +17,7 @@ func TestGetLatestEGV(t *testing.T) {
 }
 
 func TestGetEGV(t *testing.T) {
-	dexcom, err := Login("USERNAME", "PASSWORD", "REGION")
+	dexcom, err := Login("USERNAME||UUID", "PASSWORD", "REGION")
 	if err != nil {
 		t.Error(err)
 	}

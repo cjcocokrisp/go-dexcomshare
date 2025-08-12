@@ -5,7 +5,9 @@ package dexcomshare
 
 // Application ID foud by a previous reverse engineering of the share app done by the user
 // who wrote the above docs
-const ApplicationId = "d89443d2-327c-4a6f-89e5-496bbb0317db"
+const ApplicationIdUS = "d89443d2-327c-4a6f-89e5-496bbb0317db"
+const ApplicationIdOUS = ApplicationIdUS
+const ApplicationIdJP = "d8665ade-9673-4e27-9ff6-92db4ce13d13"
 
 // API Endpoints
 const BaseUrlUS = "https://share2.dexcom.com/ShareWebServices/Services"
