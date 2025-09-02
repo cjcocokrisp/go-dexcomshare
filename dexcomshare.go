@@ -30,6 +30,45 @@ type EstimatedGlucoseValue struct {
 	TrendArrow string
 }
 
+// Enum for region types.
+type Region int
+
+type RegionInfo struct {
+	BaseURL       string
+	ApplicationID string
+}
+
+// Possible regions
+const (
+	RegionUS Region = iota
+	RegionOUS
+	RegionJP
+)
+
+// Map von Region → RegionInfo
+var regionInfos = map[Region]RegionInfo{
+	RegionUS: {
+		BaseURL:       BaseUrlUS,
+		ApplicationID: ApplicationIdUS,
+	},
+	RegionOUS: {
+		BaseURL:       BaseUrlOUS,
+		ApplicationID: ApplicationIdOUS,
+	},
+	RegionJP: {
+		BaseURL:       BaseUrlJP,
+		ApplicationID: ApplicationIdJP,
+	},
+}
+
+func (r Region) BaseUrl() string {
+	return regionInfos[r].BaseURL
+}
+
+func (r Region) AppID() string {
+	return regionInfos[r].ApplicationID
+}
+
 // Function to make a POST request to the Dexcom API.
 func DexcomAPIRequest(url string, payload []byte) (*http.Response, error) {
 	res, err := Post(url, payload)
@@ -46,10 +85,9 @@ func DexcomAPIRequest(url string, payload []byte) (*http.Response, error) {
 }
 
 // Log into Dexcom with your username and password.
-func Login(username string, password string, region string) (*DexcomSession, error) {
+func Login(username string, password string, region Region) (*DexcomSession, error) {
 	var needToAuth bool
 	var accountId string
-	var ApplicationId string
 
 	if IsEmail(username) {
 		// conitnue auth
@@ -62,31 +100,16 @@ func Login(username string, password string, region string) (*DexcomSession, err
 		return nil, errors.New("invalid username format. use email or uuid.")
 	}
 
-	var BaseUrl string
-	switch region {
-	case "us":
-		BaseUrl = BaseUrlUS
-		ApplicationId = ApplicationIdUS
-	case "ous":
-		BaseUrl = BaseUrlOUS
-		ApplicationId = ApplicationIdOUS
-	case "jp":
-		BaseUrl = BaseUrlJP
-		ApplicationId = ApplicationIdJP
-	default:
-		return nil, errors.New("invalid region specified, use 'us' or 'ous'")
-	}
-
 	if needToAuth {
 		body, err := json.Marshal(map[string]string{
 			"accountName":   username,
 			"password":      password,
-			"applicationId": ApplicationId,
+			"applicationId": region.AppID(),
 		})
 		if err != nil {
 			return nil, err
 		}
-		res, err := DexcomAPIRequest(BaseUrl+AuthPath, body)
+		res, err := DexcomAPIRequest(region.BaseUrl()+AuthPath, body)
 		if err != nil {
 			return nil, err
 		}
@@ -101,15 +124,14 @@ func Login(username string, password string, region string) (*DexcomSession, err
 
 	body, err := json.Marshal(map[string]string{
 		"accountId":     accountId,
-		"applicationId": ApplicationId,
+		"applicationId": region.AppID(),
 		"password":      password,
 	})
 
 	if err != nil {
 		return nil, err
 	}
-
-	res, err := DexcomAPIRequest(BaseUrl+LoginPathId, body)
+	res, err := DexcomAPIRequest(region.BaseUrl()+LoginPathId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +148,7 @@ func Login(username string, password string, region string) (*DexcomSession, err
 		password:  password,
 		accountId: accountId,
 		sessionid: &id,
-		BaseUrl:   BaseUrl,
+		BaseUrl:   region.BaseUrl(),
 	}, nil
 }
 
@@ -138,9 +160,6 @@ func (dexcom DexcomSession) GetEGV(amount int, minutes int) ([]EstimatedGlucoseV
 		return nil, errors.New("Invalid Session Token.")
 	}
 
-	//TODO: Remove Debugging prints
-	//fmt.Printf("%s\n", dexcom.BaseUrl+CurrentEGVPath)
-	//fmt.Printf("%s\n", *dexcom.sessionid)
 	url, err := url.Parse(dexcom.BaseUrl + CurrentEGVPath)
 	if err != nil {
 		log.Fatal(err)
