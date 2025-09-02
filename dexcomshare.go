@@ -1,7 +1,6 @@
 package dexcomshare
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -10,14 +9,15 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Struct that represents a Dexcom session.
 type DexcomSession struct {
 	username  string
 	password  string
+	accountId string
 	sessionid *string
+	BaseUrl   string
 }
 
 // Struct that represents the parts of an EGV reading.
@@ -30,39 +30,115 @@ type EstimatedGlucoseValue struct {
 	TrendArrow string
 }
 
+// Enum for region types.
+type Region int
+
+type RegionInfo struct {
+	BaseURL       string
+	ApplicationID string
+}
+
+// Possible regions
+const (
+	RegionUS Region = iota
+	RegionOUS
+	RegionJP
+)
+
+// Map von Region → RegionInfo
+var regionInfos = map[Region]RegionInfo{
+	RegionUS: {
+		BaseURL:       BaseUrlUS,
+		ApplicationID: ApplicationIdUS,
+	},
+	RegionOUS: {
+		BaseURL:       BaseUrlOUS,
+		ApplicationID: ApplicationIdOUS,
+	},
+	RegionJP: {
+		BaseURL:       BaseUrlJP,
+		ApplicationID: ApplicationIdJP,
+	},
+}
+
+func (r Region) BaseUrl() string {
+	return regionInfos[r].BaseURL
+}
+
+func (r Region) AppID() string {
+	return regionInfos[r].ApplicationID
+}
+
+// Function to make a POST request to the Dexcom API.
+func DexcomAPIRequest(url string, payload []byte) (*http.Response, error) {
+	res, err := Post(url, payload)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if the response status is OK
+	if res.StatusCode != http.StatusOK {
+		return nil, errors.New("API request failed with status: " + res.Status)
+	}
+
+	return res, nil
+}
+
 // Log into Dexcom with your username and password.
-func Login(username string, password string) (*DexcomSession, error) {
+func Login(username string, password string, region Region) (*DexcomSession, error) {
+	var needToAuth bool
+	var accountId string
+
+	if IsEmail(username) {
+		// conitnue auth
+		needToAuth = true
+	} else if IsUUID(username) {
+		// continue login with id
+		needToAuth = false
+		accountId = username
+	} else {
+		return nil, errors.New("invalid username format. use email or uuid.")
+	}
+
+	if needToAuth {
+		body, err := json.Marshal(map[string]string{
+			"accountName":   username,
+			"password":      password,
+			"applicationId": region.AppID(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		res, err := DexcomAPIRequest(region.BaseUrl()+AuthPath, body)
+		if err != nil {
+			return nil, err
+		}
+		defer res.Body.Close()
+		resBody, err := io.ReadAll(res.Body)
+		if err != nil {
+			return nil, err
+		}
+		accountId = strings.ReplaceAll(string(resBody), "\"", "")
+
+	}
+
 	body, err := json.Marshal(map[string]string{
-		"accountName":   username,
+		"accountId":     accountId,
+		"applicationId": region.AppID(),
 		"password":      password,
-		"applicationId": ApplicationId,
 	})
 
 	if err != nil {
 		return nil, err
 	}
-
-	req, err := http.NewRequest("POST", BaseUrlUS+LoginPath, bytes.NewBuffer(body))
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", "application/json")
-
-	client := http.Client{Timeout: 10 * time.Second}
-	res, err := client.Do(req)
+	res, err := DexcomAPIRequest(region.BaseUrl()+LoginPathId, body)
 	if err != nil {
 		return nil, err
 	}
 	defer res.Body.Close()
 
-	// If credentials are not correct
-	if res.StatusCode == 500 {
-		return nil, errors.New("AuthError: Invalid username or password!")
-	}
-
-	body, err = io.ReadAll(res.Body)
-	id := strings.ReplaceAll(string(body), "\"", "")
+	resBody, err := io.ReadAll(res.Body)
+	id := strings.ReplaceAll(string(resBody), "\"", "")
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +146,9 @@ func Login(username string, password string) (*DexcomSession, error) {
 	return &DexcomSession{
 		username:  username,
 		password:  password,
+		accountId: accountId,
 		sessionid: &id,
+		BaseUrl:   region.BaseUrl(),
 	}, nil
 }
 
@@ -82,7 +160,7 @@ func (dexcom DexcomSession) GetEGV(amount int, minutes int) ([]EstimatedGlucoseV
 		return nil, errors.New("Invalid Session Token.")
 	}
 
-	url, err := url.Parse(BaseUrlUS + CurrentEGVPath)
+	url, err := url.Parse(dexcom.BaseUrl + CurrentEGVPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -109,7 +187,6 @@ func (dexcom DexcomSession) GetEGV(amount int, minutes int) ([]EstimatedGlucoseV
 	for i, egv := range egvs {
 		egvs[i].TrendArrow = TrendArrowMap[egv.Trend]
 	}
-
 	return egvs, nil
 }
 

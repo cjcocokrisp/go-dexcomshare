@@ -5,11 +5,16 @@ package dexcomshare
 
 // Application ID foud by a previous reverse engineering of the share app done by the user
 // who wrote the above docs
-const ApplicationId = "d8665ade-9673-4e27-9ff6-92db4ce13d13"
+const ApplicationIdUS = "d89443d2-327c-4a6f-89e5-496bbb0317db"
+const ApplicationIdOUS = ApplicationIdUS
+const ApplicationIdJP = "d8665ade-9673-4e27-9ff6-92db4ce13d13"
 
 // API Endpoints
 const BaseUrlUS = "https://share2.dexcom.com/ShareWebServices/Services"
+const BaseUrlOUS = "https://shareous1.dexcom.com/ShareWebServices/Services"
+const BaseUrlJP = "https://share.dexcom.jp/ShareWebServices/Services/"
 const LoginPath = "/General/LoginPublisherAccountByName"
+const LoginPathId = "/General/LoginPublisherAccountById"
 const AuthPath = "/General/AuthenticatePublisherAccount"
 const CurrentEGVPath = "/Publisher/ReadPublisherLatestGlucoseValues"
 

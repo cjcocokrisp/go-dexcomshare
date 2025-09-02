@@ -2,10 +2,12 @@ package dexcomshare
 
 import (
 	"testing"
+
+	"github.com/cjcocokrisp/go-dexcomshare"
 )
 
 func TestGetLatestEGV(t *testing.T) {
-	dexcom, err := Login("USERNAME", "PASSWORD")
+	dexcom, err := Login("USERNAME||UUID", "PASSWORD", dexcomshare.RegionUS)
 	if err != nil {
 		t.Error(err)
 	}
@@ -17,7 +19,7 @@ func TestGetLatestEGV(t *testing.T) {
 }
 
 func TestGetEGV(t *testing.T) {
-	dexcom, err := Login("USERNAME", "PASSWORD")
+	dexcom, err := Login("USERNAME||UUID", "PASSWORD", dexcomshare.RegionUS)
 	if err != nil {
 		t.Error(err)
 	}
